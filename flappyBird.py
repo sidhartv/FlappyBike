@@ -2,7 +2,7 @@
 import random
 from Tkinter import *
 import serial
-
+import math
 
 
 #########################################################################
@@ -10,7 +10,7 @@ import serial
 #########################################################################
 
 class Bird(object):
-    def __init__(self, x, y, size, canvasWidth, canvasHeight, color):
+    def __init__(self, x, y, size, canvasWidth, canvasHeight, color, bird):
         self.x = x
         self.y = y
         self.size = size
@@ -19,21 +19,32 @@ class Bird(object):
         self.canvasHeight = canvasHeight
         self.canvasWidth = canvasWidth
         self.color = color
+        self.bird = bird
+        self.birdWidth = bird.width()
+        self.birdHeight = bird.height()
         
-    def draw(self, canvas):
-        canvas.create_oval(self.x - self.size, self.y - self.size, 
-            self.x + self.size, self.y + self.size, fill = self.color)
+    def draw(self, canvas, timer):
+        amplitude = 20
+        period = 50 
+        height = self.y + amplitude*math.sin(period*timer)
+        canvas.create_oval(self.x - self.size, height - self.size, 
+            self.x + self.size, height + self.size, fill = self.color)
+        print(self.bird)
+        canvas.create_image(self.x - self.birdWidth, 
+            height - self.birdHeight, anchor=NW, image=self.bird)
     
     def onThrust(self):
         self.velocity = -10
 
-    def move(self):
-        self.velocity += self.gravity
-        self.y = self.y + self.velocity
-        if (self.y + self.size > self.canvasHeight):
-            self.y = self.canvasHeight - self.size
-        elif (self.y - self.size < 0):
-            self.y = self.size
+    def move(self, x, slope, intercept):
+        if(x <= 500):
+            self.y = 0
+        elif(x >= 1500):
+            self.y = data.height
+        else:
+            self.y = intercept + slope*(x)
+            
+
 
     def getLocation(self):
         return self.x, self.y
@@ -93,12 +104,13 @@ class Obstacle(object):
 
 def keyPressed(event, data):
     if (event.keysym == "Up"):
-        data.omega += 10
-        #data.bird1.onThrust()
+        data.omegaBike += 10
     elif(event.keysym == "Down"):
-        data.omega -= 10
-    elif (event.keysym == "b"):
-        data.bird2.onThrust()
+        data.omegaBike -= 10
+    elif (event.keysym == "Left"):
+        data.omegaFlap -= 10
+    elif (event.keysym == "Right"):
+        data.omegaFlap += 10
     elif(event.keysym == "r"):
         init(data)
 
@@ -133,31 +145,23 @@ def makeNewObstacle(data):
 def timerFired(data):
     #data.omega = data.ser.readline()
     #map the function to the height
-    if(data.omega <= 500):
-        data.bird1.y = 0
-    elif(data.omega >= 1500):
-        data.bird1.y = data.height
-    else:
-        print("middle")
-        data.bird1.y = data.intercept + data.slope*(data.omega)
-        print(data.bird1.y)
-
+    data.flapTimer += 1
     if(data.bird1Dead and data.bird2Dead):
         data.gameOver = True
     data.totalTime += data.timerDelay
     if (not data.gameOver):
         makeNewObstacle(data)
-        #data.bird1.move()
-        data.bird2.move()
+        data.bird1.move(data.omegaBike, data.slope, data.intercept)
+        data.bird2.move(data.omegaFlap, data.slope, data.intercept)
         moveObstacles(data)
         checkCollision(data)
 
 def redrawAll(canvas, data):
     if (not data.gameOver):
         if(not(data.bird1Dead)):
-            data.bird1.draw(canvas)
+            data.bird1.draw(canvas, data.flapTimer)
         if(not(data.bird2Dead)):
-            data.bird2.draw(canvas)
+            data.bird2.draw(canvas, data.flapTimer)
         for obstacle in data.obstacles:
             obstacle.draw(canvas)
     else:
@@ -166,15 +170,19 @@ def redrawAll(canvas, data):
 
 def init(data):
     #data.ser = serial.Serial('/dev/cu.usbmodem1421', 115200)
+    data.flapTimer = 0
     birdX1, birdY1 = data.width // 3, data.height // 2
     birdX2, birdY2 = data.width // 3, data.height // 4
     birdSize = data.height // 20
-    data.bird1 = Bird(birdX1, birdY1, birdSize, data.width, data.height, "red")
-    data.bird2 = Bird(birdX2, birdY2, birdSize, data.width, data.height, "blue")
+    data.bird1 = Bird(birdX1, birdY1, birdSize, data.width, data.height, 
+        "red", data.Fabi)
+    data.bird2 = Bird(birdX2, birdY2, birdSize, data.width, data.height,
+     "blue", data.Fobi)
     data.bird1Dead = False
     data.bird2Dead = False
     data.input = 500
-    data.omega = 1000
+    data.omegaBike = 1000
+    data.omegaFlap = 500
     x1 = 500
     x2 = 1500
     omegaRange = x2 - x1
@@ -215,9 +223,13 @@ def run(width=300, height=300):
     data.width = width
     data.height = height
     data.timerDelay = 10 # milliseconds
-    init(data)
+    
     # create the root and the canvas
     root = Tk()
+    data.Fabi = PhotoImage(file="FlappyBirds/straight.png")
+    data.Fobi = PhotoImage(file="FlappyBirds/down.png")
+    init(data)
+    
     canvas = Canvas(root, width=data.width, height=data.height)
     canvas.pack()
     # set up events
