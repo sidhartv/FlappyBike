@@ -6,7 +6,12 @@ import serial
 import math
 import PIL
 from PIL import Image
+import os
+import threading
 
+ser = serial.Serial('/dev/cu.usbmodem1421', 9600)
+omegaBike = 1000
+omegaFlap = 1000
 
 #########################################################################
 #### Bird 
@@ -38,7 +43,7 @@ class Bird(object):
         if(x <= 500):
             self.y = 0
         elif(x >= 1500):
-            self.y = data.height
+            self.y = 800
         else:
             self.y = intercept + slope*(x)
             
@@ -71,7 +76,7 @@ class Obstacle(object):
         self.bodyWidth = body.width()
         self.bodyHeight = body.height()
         self.topRects = int(math.ceil((self.y - self.gapSize/2)/self.bodyHeight))
-        self.bottomRects = int(math.ceil((self.y + self.gapSize/2)/self.bodyHeight))
+        self.bottomRects = int(math.ceil((800 - (self.y + self.gapSize/2))/self.bodyHeight))
 
         
     def draw(self, canvas):
@@ -121,6 +126,7 @@ class Obstacle(object):
 
 ###########################################################
 
+
 def keyPressed(event, data):
     if (event.keysym == "Up"):
         data.omegaBike -= 50
@@ -145,7 +151,7 @@ def checkCollision(data):
     for obstacle in data.obstacles:
         if (obstacle.isColliding(birdX1, birdY1, data.bird1.birdWidth,
             data.bird1.birdHeight)):
-            data.bird1Dead = True
+            #data.bird1Dead = True
             return
         elif(obstacle.isColliding(birdX2, birdY2, data.bird2.birdWidth,
             data.bird2.birdHeight)):
@@ -176,13 +182,14 @@ def timerFired(data):
     #print(data.omegaBike)
     #map the function to the height
     data.flapTimer += 1
-    print(data.flapTimer)
-    if(data.flapTimer % 300 == 0):
-        data.omegaBike = eval(data.ser.readline())
-        print("data.omegaBike")
+    #print(data.flapTimer)
+    # if(data.flapTimer % 5 == 0):
+    #     data.omegaBike = eval(data.ser.readline())
+    #     print(data.omegaBike)
 
     if(data.bird1Dead and data.bird2Dead):
-        data.gameOver = True
+        pass
+        #data.gameOver = True
     if(data.bird1Dead):
         if(data.bird1.y + data.bird1.birdHeight/2 < data.height):
             data.bird1.y += 25
@@ -192,8 +199,8 @@ def timerFired(data):
     data.totalTime += data.timerDelay
     if (not data.gameOver):
         makeNewObstacle(data)
-        data.bird1.move(data.omegaBike, data.slope, data.intercept)
-        data.bird2.move(data.omegaFlap, data.slope, data.intercept)
+        data.bird1.move(omegaBike, data.slope, data.intercept)
+        data.bird2.move(omegaFlap, data.slope, data.intercept)
         moveObstacles(data)
         checkCollision(data)
 
@@ -220,8 +227,9 @@ def redrawAll(canvas, data):
 
 
 def init(data):
+    data.thread = threading.Thread(target=readSer)
+    data.thread.start()
     data.score = 0
-    data.ser = serial.Serial('/dev/cu.usbmodem1421', 115200)
     data.flapTimer = 0
     data.imagex = 0
     birdX1, birdY1 = data.width // 3, data.height // 2
@@ -245,12 +253,18 @@ def init(data):
 
     data.obstacles = []
     data.scoreList = []
-    data.obstacleFreq = 400
+    data.obstacleFreq = 800
     data.obstacleWidth = data.width // 12 
     data.gapSize = data.height // 4
 
     data.totalTime = 0
     data.gameOver = False
+
+def readSer():
+    while True:
+        global omegaBike
+        omegaBike = eval(ser.readline())
+        print(omegaBike)
 
 def run(width=300, height=300):
     def redrawAllWrapper(canvas, data):
@@ -287,6 +301,7 @@ def run(width=300, height=300):
     data.top = PhotoImage(file="FlappyPipes/top.gif")
     data.body = PhotoImage(file="FlappyPipes/body.gif")
     data.scoresign = PhotoImage(file="FlappyBirds/flap.gif")
+
     init(data)
     
     canvas = Canvas(root, width=data.width, height=data.height)
@@ -301,4 +316,4 @@ def run(width=300, height=300):
     root.mainloop()  # blocks until window is closed
     print("bye!")
 
-run(1600, 800)
+run(800, 800)
