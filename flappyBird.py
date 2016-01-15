@@ -3,6 +3,8 @@ import random
 from Tkinter import *
 import serial
 import math
+import PIL
+from PIL import Image
 
 
 #########################################################################
@@ -22,19 +24,15 @@ class Bird(object):
         self.bird = bird
         self.birdWidth = bird.width()
         self.birdHeight = bird.height()
-        
+        print(self.birdWidth)
+        print(self.birdHeight)
+
     def draw(self, canvas, timer):
         amplitude = 20
         period = 50 
         height = self.y + amplitude*math.sin(period*timer)
-        canvas.create_oval(self.x - self.size, height - self.size, 
-            self.x + self.size, height + self.size, fill = self.color)
-        print(self.bird)
-        canvas.create_image(self.x - self.birdWidth, 
-            height - self.birdHeight, anchor=NW, image=self.bird)
-    
-    def onThrust(self):
-        self.velocity = -10
+        canvas.create_image(self.x - self.birdWidth/2, 
+            height - self.birdHeight/2, anchor = NW, image=self.bird)
 
     def move(self, x, slope, intercept):
         if(x <= 500):
@@ -78,11 +76,13 @@ class Obstacle(object):
     def move(self):
         self.x -= self.speed
 
-    def isColliding(self, birdX, birdY, birdSize):
-        birdCorners = [(birdX - birdSize, birdY - birdSize),
-                    (birdX + birdSize, birdY - birdSize),
-                    (birdX - birdSize, birdY + birdSize),
-                    (birdX + birdSize, birdY + birdSize)]
+    def isColliding(self, birdX, birdY, birdWidth, birdHeight):
+        birdWidth = (1.0/3)*birdWidth
+        birdHeight = (1.0/3)*birdHeight
+        birdCorners = [(birdX - birdWidth/2, birdY - birdHeight/2),
+                    (birdX + birdWidth/2, birdY - birdHeight/2),
+                    (birdX - birdWidth/2, birdY + birdHeight/2),
+                    (birdX + birdWidth/2, birdY + birdHeight/2)]
 
         obstacleX1, obstacleY1 = (self.x - self.width // 2, 
                                   self.y - self.gapSize // 2)
@@ -96,7 +96,7 @@ class Obstacle(object):
         return False
 
     def isOffScreen(self):
-        if self.x <= self.gapSize // 2:
+        if self.x <= -self.gapSize // 2:
             return True
         return False
 
@@ -104,13 +104,13 @@ class Obstacle(object):
 
 def keyPressed(event, data):
     if (event.keysym == "Up"):
-        data.omegaBike += 10
+        data.omegaBike -= 50
     elif(event.keysym == "Down"):
-        data.omegaBike -= 10
+        data.omegaBike += 50
     elif (event.keysym == "Left"):
-        data.omegaFlap -= 10
+        data.omegaFlap -= 50
     elif (event.keysym == "Right"):
-        data.omegaFlap += 10
+        data.omegaFlap += 50
     elif(event.keysym == "r"):
         init(data)
 
@@ -122,20 +122,22 @@ def checkCollision(data):
     birdX2, birdY2 = data.bird2.getLocation()
     birdSize1 = data.bird1.getSize()
     birdSize2 = data.bird2.getSize()
+    print(len(data.obstacles))
     for obstacle in data.obstacles:
-        if (obstacle.isColliding(birdX1, birdY1, birdSize1)):
+        if (obstacle.isColliding(birdX1, birdY1, data.bird1.birdWidth,
+            data.bird1.birdHeight)):
             data.bird1Dead = True
             return
-        elif(obstacle.isColliding(birdX2, birdY2, birdSize2)):
-            data.bird2Dead = True
-            return
+        # elif(obstacle.isColliding(birdX2, birdY2, birdSize2)):
+        #     data.bird2Dead = True
+        #     return
 
 def moveObstacles(data):
     for obstacle in data.obstacles:
         if obstacle.isOffScreen():
-            data.obstacles.remove(obstacle)
-    for obstacle in data.obstacles:
+            data.obstacles.pop(0)
         obstacle.move()
+
 
 def makeNewObstacle(data):
     if (data.totalTime % data.obstacleFreq == 0):
@@ -146,22 +148,25 @@ def timerFired(data):
     #data.omega = data.ser.readline()
     #map the function to the height
     data.flapTimer += 1
-    if(data.bird1Dead and data.bird2Dead):
+    # if(data.bird1Dead and data.bird2Dead):
+    #     data.gameOver = True
+    if(data.bird1Dead):
         data.gameOver = True
     data.totalTime += data.timerDelay
     if (not data.gameOver):
         makeNewObstacle(data)
         data.bird1.move(data.omegaBike, data.slope, data.intercept)
-        data.bird2.move(data.omegaFlap, data.slope, data.intercept)
+        #data.bird2.move(data.omegaFlap, data.slope, data.intercept)
         moveObstacles(data)
         checkCollision(data)
 
 def redrawAll(canvas, data):
+    canvas.create_image(0, -100, anchor = NW, image=data.backdrop)
     if (not data.gameOver):
         if(not(data.bird1Dead)):
             data.bird1.draw(canvas, data.flapTimer)
-        if(not(data.bird2Dead)):
-            data.bird2.draw(canvas, data.flapTimer)
+        # if(not(data.bird2Dead)):
+        #     data.bird2.draw(canvas, data.flapTimer)
         for obstacle in data.obstacles:
             obstacle.draw(canvas)
     else:
@@ -182,7 +187,7 @@ def init(data):
     data.bird2Dead = False
     data.input = 500
     data.omegaBike = 1000
-    data.omegaFlap = 500
+    data.omegaFlap = 750
     x1 = 500
     x2 = 1500
     omegaRange = x2 - x1
@@ -191,7 +196,7 @@ def init(data):
 
 
     data.obstacles = []
-    data.obstacleFreq = 800
+    data.obstacleFreq = 600
     data.obstacleWidth = data.width // 6 
     data.gapSize = data.height // 4
 
@@ -222,12 +227,13 @@ def run(width=300, height=300):
     data = Struct()
     data.width = width
     data.height = height
-    data.timerDelay = 10 # milliseconds
+    data.timerDelay = 5 # milliseconds
     
     # create the root and the canvas
     root = Tk()
-    data.Fabi = PhotoImage(file="FlappyBirds/straight.png")
-    data.Fobi = PhotoImage(file="FlappyBirds/down.png")
+    data.Fabi = PhotoImage(file="FlappyBirds/test_copy.gif")
+    data.Fobi = PhotoImage(file="FlappyBirds/test_copy.gif")
+    data.backdrop = PhotoImage(file="FlappyBirds/back.gif")
     init(data)
     
     canvas = Canvas(root, width=data.width, height=data.height)
