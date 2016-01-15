@@ -1,4 +1,5 @@
 #Fall 2015: OOP and Animation - FlappyBird 
+#Framework for FlappyBird by Rudina Morina :)
 import random
 from Tkinter import *
 import serial
@@ -24,11 +25,10 @@ class Bird(object):
         self.bird = bird
         self.birdWidth = bird.width()
         self.birdHeight = bird.height()
-        print(self.birdWidth)
-        print(self.birdHeight)
+ 
 
     def draw(self, canvas, timer):
-        amplitude = 20
+        amplitude = 10
         period = 50 
         height = self.y + amplitude*math.sin(period*timer)
         canvas.create_image(self.x - self.birdWidth/2, 
@@ -56,22 +56,41 @@ class Bird(object):
 #########################################################################
 
 class Obstacle(object):
-    def __init__(self, gapSize, width, canvasWidth, canvasHeight):
+    def __init__(self, gapSize, width, canvasWidth, canvasHeight, top, body):
         self.gapSize = gapSize
         self.width = width
         self.canvasWidth = canvasWidth
         self.canvasHeight = canvasHeight
         self.y = random.randrange(gapSize, canvasHeight - gapSize)
         self.x = canvasWidth + gapSize
-        self.speed = 5
+        self.speed = 10
+        self.top = top
+        self.body = body
+        self.topWidth = top.width()
+        self.topHeight = top.height()
+        self.bodyWidth = body.width()
+        self.bodyHeight = body.height()
+        self.topRects = int(math.ceil((self.y - self.gapSize/2)/self.bodyHeight))
+        self.bottomRects = int(math.ceil((self.y + self.gapSize/2)/self.bodyHeight))
+
         
     def draw(self, canvas):
-        canvas.create_rectangle(self.x - self.width // 2, 0, 
-            self.x + self.width // 2, self.y - self.gapSize // 2, fill="green")
-
-        canvas.create_rectangle(self.x - self.width // 2, 
-            self.y + self.gapSize // 2, self.x + self.width // 2, 
-            self.canvasHeight, fill="green")
+        canvas.create_image(self.x - self.topWidth/2, 
+            self.y - self.gapSize // 2 - self.topHeight, 
+            anchor=NW, image=self.top)
+        canvas.create_image(self.x - self.topWidth/2, 
+            self.y + self.gapSize // 2, 
+            anchor=NW, image=self.top)
+        #draw top rectangles
+        for i in xrange(self.topRects+1):
+            canvas.create_image(self.x - self.bodyWidth/2, 
+                self.y - self.gapSize/2 - self.topHeight - (i+1)*self.bodyHeight, 
+                anchor = NW,
+                image=self.body)
+        for j in xrange(self.bottomRects+1):
+            canvas.create_image(self.x - self.bodyWidth/2,
+                self.y + self.gapSize/2 + self.topHeight+ j*self.bodyHeight,
+                anchor = NW, image=self.body)
                                     
     def move(self):
         self.x -= self.speed
@@ -84,9 +103,9 @@ class Obstacle(object):
                     (birdX - birdWidth/2, birdY + birdHeight/2),
                     (birdX + birdWidth/2, birdY + birdHeight/2)]
 
-        obstacleX1, obstacleY1 = (self.x - self.width // 2, 
+        obstacleX1, obstacleY1 = (self.x - self.bodyWidth // 2, 
                                   self.y - self.gapSize // 2)
-        obstacleX2, obstacleY2 = (self.x + self.width // 2, 
+        obstacleX2, obstacleY2 = (self.x + self.bodyWidth // 2, 
                                  self.y + self.gapSize // 2)
 
         for (cornerX, cornerY) in birdCorners:
@@ -122,60 +141,83 @@ def checkCollision(data):
     birdX2, birdY2 = data.bird2.getLocation()
     birdSize1 = data.bird1.getSize()
     birdSize2 = data.bird2.getSize()
-    print(len(data.obstacles))
+
     for obstacle in data.obstacles:
         if (obstacle.isColliding(birdX1, birdY1, data.bird1.birdWidth,
             data.bird1.birdHeight)):
             data.bird1Dead = True
             return
-        # elif(obstacle.isColliding(birdX2, birdY2, birdSize2)):
-        #     data.bird2Dead = True
-        #     return
+        elif(obstacle.isColliding(birdX2, birdY2, data.bird2.birdWidth,
+            data.bird2.birdHeight)):
+            data.bird2Dead = True
+            return
 
 def moveObstacles(data):
     for obstacle in data.obstacles:
+        i = data.obstacles.index(obstacle)
+        if(not(data.scoreList[i]) and 
+            obstacle.x + obstacle.width/2 < data.bird1.x):
+            data.scoreList[i] = True
+            data.score += 1
+            print("you did it!")
         if obstacle.isOffScreen():
             data.obstacles.pop(0)
+            data.scoreList.pop(0)
         obstacle.move()
 
 
 def makeNewObstacle(data):
     if (data.totalTime % data.obstacleFreq == 0):
         data.obstacles.append(Obstacle(data.gapSize, data.obstacleWidth, 
-            data.width, data.height))
+            data.width, data.height, data.top, data.body))
+        data.scoreList.append(False)
 
 def timerFired(data):
     #data.omega = data.ser.readline()
     #map the function to the height
     data.flapTimer += 1
-    # if(data.bird1Dead and data.bird2Dead):
-    #     data.gameOver = True
-    if(data.bird1Dead):
+    if(data.bird1Dead and data.bird2Dead):
         data.gameOver = True
+    if(data.bird1Dead):
+        if(data.bird1.y + data.bird1.birdHeight/2 < data.height):
+            data.bird1.y += 25
+    if(data.bird2Dead):
+        if(data.bird2.y + data.bird2.birdHeight/2 < data.height):
+            data.bird2.y += 25
     data.totalTime += data.timerDelay
     if (not data.gameOver):
         makeNewObstacle(data)
         data.bird1.move(data.omegaBike, data.slope, data.intercept)
-        #data.bird2.move(data.omegaFlap, data.slope, data.intercept)
+        data.bird2.move(data.omegaFlap, data.slope, data.intercept)
         moveObstacles(data)
         checkCollision(data)
 
 def redrawAll(canvas, data):
     canvas.create_image(0, -100, anchor = NW, image=data.backdrop)
-    if (not data.gameOver):
-        if(not(data.bird1Dead)):
-            data.bird1.draw(canvas, data.flapTimer)
-        # if(not(data.bird2Dead)):
-        #     data.bird2.draw(canvas, data.flapTimer)
-        for obstacle in data.obstacles:
-            obstacle.draw(canvas)
-    else:
-        canvas.create_rectangle(0, 0, data.width, data.height, fill="yellow")
+    canvas.create_image(797, -100, anchor = NW, image=data.backdrop)
+    if(not(data.bird1Dead)):
+        data.bird1.draw(canvas, data.flapTimer)
+    if(not(data.bird2Dead)):
+        data.bird2.draw(canvas, data.flapTimer)
+    for obstacle in data.obstacles:
+        obstacle.draw(canvas)
+    if(data.gameOver):
+        
+        canvas.create_image(data.width/2 - data.scoresign.width()/2
+            - data.scoresign.width()/6, 
+            data.height/2 - data.scoresign.height()/2, anchor = NW, 
+            image=data.scoresign)
+        canvas.create_image(data.width/2 - data.overImg.width()/2 -
+            data.overImg.width()/6, -100,
+            anchor=NW, image=data.overImg)
+        data.bird1.draw(canvas, data.flapTimer)
 
 
 def init(data):
+    data.score = 0
     #data.ser = serial.Serial('/dev/cu.usbmodem1421', 115200)
     data.flapTimer = 0
+    data.imagex = 0
     birdX1, birdY1 = data.width // 3, data.height // 2
     birdX2, birdY2 = data.width // 3, data.height // 4
     birdSize = data.height // 20
@@ -196,8 +238,9 @@ def init(data):
 
 
     data.obstacles = []
-    data.obstacleFreq = 600
-    data.obstacleWidth = data.width // 6 
+    data.scoreList = []
+    data.obstacleFreq = 400
+    data.obstacleWidth = data.width // 12 
     data.gapSize = data.height // 4
 
     data.totalTime = 0
@@ -232,8 +275,12 @@ def run(width=300, height=300):
     # create the root and the canvas
     root = Tk()
     data.Fabi = PhotoImage(file="FlappyBirds/test_copy.gif")
-    data.Fobi = PhotoImage(file="FlappyBirds/test_copy.gif")
+    data.Fobi = PhotoImage(file="FlappyBirds/purplebird.gif")
     data.backdrop = PhotoImage(file="FlappyBirds/back.gif")
+    data.overImg = PhotoImage(file="FlappyBirds/gover.gif")
+    data.top = PhotoImage(file="FlappyPipes/top.gif")
+    data.body = PhotoImage(file="FlappyPipes/body.gif")
+    data.scoresign = PhotoImage(file="FlappyBirds/flap.gif")
     init(data)
     
     canvas = Canvas(root, width=data.width, height=data.height)
@@ -248,4 +295,4 @@ def run(width=300, height=300):
     root.mainloop()  # blocks until window is closed
     print("bye!")
 
-run(800, 800)
+run(1600, 800)
