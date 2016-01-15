@@ -9,10 +9,17 @@ from PIL import Image
 import os
 import threading
 
-ser = serial.Serial('/dev/cu.usbmodem1421', 9600)
+ser1 = serial.Serial('/dev/cu.usbmodem1421', 9600)
+ser2 = serial.Serial('/dev/cu.usbmodem1421', 9600)
+# omegaBikePrev = 0
+# omegaFlapPrev = 0
+# omegaBikeCurr = None
+# omegaFlapCurr = None
+prevBike = 0
+prevFlap = 0
 omegaBike = 1000
 omegaFlap = 1000
-
+speed = 10
 #########################################################################
 #### Bird 
 #########################################################################
@@ -22,7 +29,7 @@ class Bird(object):
         self.x = x
         self.y = y
         self.size = size
-        self.velocity = 0
+        self.velocity = 10
         self.gravity = 1
         self.canvasHeight = canvasHeight
         self.canvasWidth = canvasWidth
@@ -30,24 +37,35 @@ class Bird(object):
         self.bird = bird
         self.birdWidth = bird.width()
         self.birdHeight = bird.height()
+        self.specialV = 0
  
 
     def draw(self, canvas, timer):
         amplitude = 10
         period = 50 
-        height = self.y + amplitude*math.sin(period*timer)
+        #height = self.y + amplitude*math.sin(period*timer)
         canvas.create_image(self.x - self.birdWidth/2, 
-            height - self.birdHeight/2, anchor = NW, image=self.bird)
+            self.y - self.birdHeight/2, anchor = NW, image=self.bird)
 
     def move(self, x, slope, intercept):
-        if(x <= 500):
-            self.y = 0
-        elif(x >= 1500):
-            self.y = 800
-        else:
-            self.y = intercept + slope*(x)
+        # if(x <= 500):
+        #     self.y = 0
+        # elif(x >= 1500):
+        #     self.y = 800
+        # else:
+        #     self.y = intercept + slope*(x)
+        if(self.specialV != 0):
+            self.y -= self.specialV
             
 
+        
+    def grav(self, data):
+        self.y = self.y + self.velocity
+        if (self.y + self.size > self.canvasHeight):
+            self.y = self.canvasHeight - self.size
+        elif (self.y - self.size < 0):
+            self.y = self.size
+        
 
     def getLocation(self):
         return self.x, self.y
@@ -98,7 +116,7 @@ class Obstacle(object):
                 anchor = NW, image=self.body)
                                     
     def move(self):
-        self.x -= self.speed
+        self.x -= speed
 
     def isColliding(self, birdX, birdY, birdWidth, birdHeight):
         birdWidth = (1.0/3)*birdWidth
@@ -151,12 +169,12 @@ def checkCollision(data):
     for obstacle in data.obstacles:
         if (obstacle.isColliding(birdX1, birdY1, data.bird1.birdWidth,
             data.bird1.birdHeight)):
-            #data.bird1Dead = True
+            data.bird1Dead = True
             return
-        elif(obstacle.isColliding(birdX2, birdY2, data.bird2.birdWidth,
-            data.bird2.birdHeight)):
-            data.bird2Dead = True
-            return
+        # elif(obstacle.isColliding(birdX2, birdY2, data.bird2.birdWidth,
+        #     data.bird2.birdHeight)):
+        #     data.bird2Dead = True
+        #     return
 
 def moveObstacles(data):
     for obstacle in data.obstacles:
@@ -177,20 +195,40 @@ def makeNewObstacle(data):
             data.width, data.height, data.top, data.body))
         data.scoreList.append(False)
 
+def calculateSpeed(data):
+    global omegaBike
+    if(omegaBike <= 750):
+        print("here")
+        data.bird1.specialV = 100
+    elif(omegaBike <= 1000):
+        data.bird1.specialV = 80
+    elif(omegaBike <= 1250):
+        data.bird1.specialV = 60
+    elif(omegaBike <= 1500):
+        data.bird1.specialV = 40
+    elif(omegaBike <= 1750):
+        data.bird1.specialV = 20
+    else:
+        data.bird1.specialV = 0
+    omegaBike = 2000
+
 def timerFired(data):
-    
-    #print(data.omegaBike)
+    global speed
+    calculateSpeed(data)
     #map the function to the height
     data.flapTimer += 1
-    #print(data.flapTimer)
-    # if(data.flapTimer % 5 == 0):
-    #     data.omegaBike = eval(data.ser.readline())
-    #     print(data.omegaBike)
+    if(data.flapTimer % 3 == 0):
+        data.bird1.grav(data)
+    if(data.flapTimer % 100 == 0):
+        speed += 1
+
+
 
     if(data.bird1Dead and data.bird2Dead):
         pass
         #data.gameOver = True
     if(data.bird1Dead):
+        data.gameOver = True
         if(data.bird1.y + data.bird1.birdHeight/2 < data.height):
             data.bird1.y += 25
     if(data.bird2Dead):
@@ -209,8 +247,8 @@ def redrawAll(canvas, data):
     canvas.create_image(797, -100, anchor = NW, image=data.backdrop)
     if(not(data.bird1Dead)):
         data.bird1.draw(canvas, data.flapTimer)
-    if(not(data.bird2Dead)):
-        data.bird2.draw(canvas, data.flapTimer)
+    # if(not(data.bird2Dead)):
+    #     data.bird2.draw(canvas, data.flapTimer)
     for obstacle in data.obstacles:
         obstacle.draw(canvas)
     if(data.gameOver):
@@ -223,12 +261,18 @@ def redrawAll(canvas, data):
             data.overImg.width()/6, -100,
             anchor=NW, image=data.overImg)
         data.bird1.draw(canvas, data.flapTimer)
-        data.bird2.draw(canvas, data.flapTimer)
+        #data.bird2.draw(canvas, data.flapTimer)
 
 
 def init(data):
-    data.thread = threading.Thread(target=readSer)
-    data.thread.start()
+    global speed
+    speed = 10
+    data.thread1 = threading.Thread(target=readSer1)
+    data.thread1.daemon = True
+    #data.thread2 = threading.Thread(target=readSer2)
+    #data.thread2.daemon = True
+    data.thread1.start()
+    #data.thread2.start()
     data.score = 0
     data.flapTimer = 0
     data.imagex = 0
@@ -253,18 +297,25 @@ def init(data):
 
     data.obstacles = []
     data.scoreList = []
-    data.obstacleFreq = 800
+    data.obstacleFreq = 400
     data.obstacleWidth = data.width // 12 
     data.gapSize = data.height // 4
 
     data.totalTime = 0
     data.gameOver = False
 
-def readSer():
+def readSer1():
     while True:
         global omegaBike
-        omegaBike = eval(ser.readline())
+        omegaBike = eval(ser1.readline())
         print(omegaBike)
+
+
+
+def readSer2():
+    while True:
+        global omegaFlap
+        omegaFlap = eval(ser2.readline())
 
 def run(width=300, height=300):
     def redrawAllWrapper(canvas, data):
@@ -316,4 +367,4 @@ def run(width=300, height=300):
     root.mainloop()  # blocks until window is closed
     print("bye!")
 
-run(800, 800)
+run(1600, 800)
