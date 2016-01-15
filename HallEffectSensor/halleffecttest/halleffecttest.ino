@@ -5,9 +5,9 @@ Please check out  http://diyhacking.com for the tutorial of this project.
 DIY Hacking
 */
 
-#include "Timer.h"
+//#include "Timer.h"
 
-Timer t;
+//Timer t;
 int pin = 13;
 
  volatile byte half_revolutions;
@@ -16,7 +16,8 @@ int pin = 13;
  void setup()
  {
    Serial.begin(115200);
-   attachInterrupt(0, magnet_detect, RISING);//Initialize the intterrupt pin (Arduino digital pin 2)
+   attachInterrupt(0, magnet_detect, RISING);//Initialize the interrupt pin (Arduino digital pin 2)
+   attachInterrupt(1, magnet_detect, RISING);//Initialize the interrupt pin (Arduino digital pin 3)
    half_revolutions = 0;
    rpm = 0;
    timeold = 0;
