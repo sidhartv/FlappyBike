@@ -159,7 +159,6 @@ def moveObstacles(data):
             obstacle.x + obstacle.width/2 < data.bird1.x):
             data.scoreList[i] = True
             data.score += 1
-            print("you did it!")
         if obstacle.isOffScreen():
             data.obstacles.pop(0)
             data.scoreList.pop(0)
@@ -173,9 +172,15 @@ def makeNewObstacle(data):
         data.scoreList.append(False)
 
 def timerFired(data):
-    #data.omega = data.ser.readline()
+    
+    #print(data.omegaBike)
     #map the function to the height
     data.flapTimer += 1
+    print(data.flapTimer)
+    if(data.flapTimer % 300 == 0):
+        data.omegaBike = eval(data.ser.readline())
+        print("data.omegaBike")
+
     if(data.bird1Dead and data.bird2Dead):
         data.gameOver = True
     if(data.bird1Dead):
@@ -211,11 +216,12 @@ def redrawAll(canvas, data):
             data.overImg.width()/6, -100,
             anchor=NW, image=data.overImg)
         data.bird1.draw(canvas, data.flapTimer)
+        data.bird2.draw(canvas, data.flapTimer)
 
 
 def init(data):
     data.score = 0
-    #data.ser = serial.Serial('/dev/cu.usbmodem1421', 115200)
+    data.ser = serial.Serial('/dev/cu.usbmodem1421', 115200)
     data.flapTimer = 0
     data.imagex = 0
     birdX1, birdY1 = data.width // 3, data.height // 2
@@ -274,8 +280,8 @@ def run(width=300, height=300):
     
     # create the root and the canvas
     root = Tk()
-    data.Fabi = PhotoImage(file="FlappyBirds/test_copy.gif")
-    data.Fobi = PhotoImage(file="FlappyBirds/purplebird.gif")
+    data.Fabi = PhotoImage(file="FlappyBirds/yellowbirdy.gif")
+    data.Fobi = PhotoImage(file="FlappyBirds/purplebirdy.gif")
     data.backdrop = PhotoImage(file="FlappyBirds/back.gif")
     data.overImg = PhotoImage(file="FlappyBirds/gover.gif")
     data.top = PhotoImage(file="FlappyPipes/top.gif")
