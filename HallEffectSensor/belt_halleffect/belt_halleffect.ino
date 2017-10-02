@@ -17,7 +17,6 @@ int pin = 13;
  {
    Serial.begin(9600);
    attachInterrupt(0, magnet_detect, RISING);//Initialize the interrupt pin (Arduino digital pin 2)
-   attachInterrupt(1, magnet_detect, RISING);//Initialize the interrupt pin (Arduino digital pin 3)
    
    half_revolutions = 0;
    rpm = 500;
